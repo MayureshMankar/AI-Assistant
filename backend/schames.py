@@ -58,7 +58,7 @@ class ChatMessageCreate(ChatMessageBase):
     model_used: Optional[str] = None
     tokens_used: Optional[int] = None
     response_time: Optional[float] = None
-    message_metadata: Optional[Dict[str, Any]] = None
+    message_extra_data: Optional[Dict[str, Any]] = None
 
 class ChatMessage(ChatMessageBase):
     id: UUID
@@ -66,7 +66,7 @@ class ChatMessage(ChatMessageBase):
     model_used: Optional[str] = None
     tokens_used: Optional[int] = None
     response_time: Optional[float] = None
-    message_metadata: Optional[Dict[str, Any]] = None
+    message_extra_data: Optional[Dict[str, Any]] = None
     created_at: datetime
 
     class Config:

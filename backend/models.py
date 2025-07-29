@@ -4,7 +4,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
-# Create the base class for models
+# Create the base class for models - using a completely clean approach
 Base = declarative_base()
 
 class User(Base):
@@ -19,12 +19,6 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relationships
-    chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
-
-    def __repr__(self):
-        return f"<User(username='{self.username}', email='{self.email}')>"
-
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
     
@@ -34,16 +28,6 @@ class ChatSession(Base):
     mode = Column(String(50), nullable=False)  # chat, execute, debug, refactor, analyze, workflow
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-    # Relationships
-    user = relationship("User", back_populates="chat_sessions")
-    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
-    code_executions = relationship("CodeExecution", back_populates="session", cascade="all, delete-orphan")
-    code_analyses = relationship("CodeAnalysis", back_populates="session", cascade="all, delete-orphan")
-    file_uploads = relationship("FileUpload", back_populates="session", cascade="all, delete-orphan")
-
-    def __repr__(self):
-        return f"<ChatSession(name='{self.session_name}', mode='{self.mode}')>"
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
@@ -55,14 +39,8 @@ class ChatMessage(Base):
     model_used = Column(String(100))
     tokens_used = Column(Integer)
     response_time = Column(Float)  # in seconds
-    message_metadata = Column(JSON)  # renamed from metadata to avoid conflict
+    message_extra_data = Column(JSON)  # store additional data like execution results - renamed to avoid any conflict
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relationships
-    session = relationship("ChatSession", back_populates="messages")
-
-    def __repr__(self):
-        return f"<ChatMessage(role='{self.role}', model='{self.model_used}')>"
 
 class CodeExecution(Base):
     __tablename__ = "code_executions"
@@ -77,12 +55,6 @@ class CodeExecution(Base):
     execution_time = Column(Float)  # in seconds
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
-    session = relationship("ChatSession", back_populates="code_executions")
-
-    def __repr__(self):
-        return f"<CodeExecution(language='{self.language}', time={self.execution_time})>"
-
 class CodeAnalysis(Base):
     __tablename__ = "code_analyses"
     
@@ -93,12 +65,6 @@ class CodeAnalysis(Base):
     results = Column(JSON)  # store analysis results
     model_used = Column(String(100))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # Relationships
-    session = relationship("ChatSession", back_populates="code_analyses")
-
-    def __repr__(self):
-        return f"<CodeAnalysis(type='{self.analysis_type}', model='{self.model_used}')>"
 
 class FileUpload(Base):
     __tablename__ = "file_uploads"
@@ -113,12 +79,6 @@ class FileUpload(Base):
     embeddings = Column(JSON)  # store code embeddings for search
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationships
-    session = relationship("ChatSession", back_populates="file_uploads")
-
-    def __repr__(self):
-        return f"<FileUpload(filename='{self.filename}', size={self.file_size})>"
-
 class APIUsage(Base):
     __tablename__ = "api_usage"
     
@@ -132,10 +92,6 @@ class APIUsage(Base):
     model_used = Column(String(100))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    def __repr__(self):
-        return f"<APIUsage(endpoint='{self.endpoint}', status={self.status_code})>"
-
-# Additional models for enhanced functionality
 class ProjectTemplate(Base):
     __tablename__ = "project_templates"
     
@@ -149,9 +105,6 @@ class ProjectTemplate(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    def __repr__(self):
-        return f"<ProjectTemplate(name='{self.name}', language='{self.language}')>"
-
 class SystemMetrics(Base):
     __tablename__ = "system_metrics"
     
@@ -159,8 +112,5 @@ class SystemMetrics(Base):
     metric_name = Column(String(100), nullable=False)
     metric_value = Column(Float, nullable=False)
     metric_type = Column(String(50), nullable=False)  # counter, gauge, histogram
-    tags = Column(JSON)  # additional metadata
+    tags = Column(JSON)  # additional tags
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
-
-    def __repr__(self):
-        return f"<SystemMetrics(name='{self.metric_name}', value={self.metric_value})>"
