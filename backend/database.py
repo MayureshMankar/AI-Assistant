@@ -1,5 +1,4 @@
 from sqlalchemy import create_engine, text
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool, QueuePool
 import os
@@ -46,8 +45,15 @@ else:
 # Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class for models
-Base = declarative_base()
+# Import Base from models to avoid conflicts
+# Note: This import must be after engine creation to avoid circular imports
+try:
+    from models import Base
+except ImportError:
+    # Fallback for testing or if models.py doesn't exist
+    from sqlalchemy.orm import declarative_base
+    Base = declarative_base()
+    logger.warning("Could not import Base from models.py, creating fallback Base")
 
 # Database session dependency
 def get_db() -> Session:
@@ -81,7 +87,13 @@ async def get_db_session() -> AsyncGenerator[Session, None]:
 def create_tables():
     """Create all database tables"""
     try:
-        from models import Base  # Import here to avoid circular imports
+        # Import all models to ensure they are registered with Base
+        from models import (
+            User, ChatSession, ChatMessage, CodeExecution, 
+            CodeAnalysis, FileUpload, APIUsage, ProjectTemplate, SystemMetrics
+        )
+        
+        logger.info("Creating database tables...")
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created successfully!")
         return True
@@ -145,9 +157,9 @@ def get_database_info():
                 
                 return {
                     "database_type": "PostgreSQL",
-                    "database_url": str(engine.url).replace(engine.url.password, "***"),
+                    "database_url": str(engine.url).replace(str(engine.url.password), "***") if engine.url.password else str(engine.url),
                     "tables": tables,
-                    "engine_info": str(engine.url).replace(str(engine.url.password), "***"),
+                    "engine_info": str(engine.url).replace(str(engine.url.password), "***") if engine.url.password else str(engine.url),
                     "pool_size": pool.size(),
                     "checked_in": pool.checkedin(),
                     "checked_out": pool.checkedout(),
@@ -189,26 +201,56 @@ def initialize_database():
 def insert_default_data():
     """Insert default data into the database"""
     try:
-        from models import User, ChatSession
+        from models import User, ChatSession, ProjectTemplate
         
         db = SessionLocal()
         
-        # Check if we need to insert default data
-        existing_users = db.query(User).count()
-        if existing_users == 0:
-            logger.info("Inserting default data...")
+        try:
+            # Check if we need to insert default data
+            existing_users = db.query(User).count()
+            if existing_users == 0:
+                logger.info("Inserting default data...")
+                
+                # Add some default project templates
+                default_templates = [
+                    {
+                        "name": "Python Flask API",
+                        "description": "RESTful API with Flask framework",
+                        "language": "python",
+                        "framework": "flask",
+                        "template_data": {
+                            "files": {
+                                "app.py": "from flask import Flask\n\napp = Flask(__name__)\n\n@app.route('/')\ndef hello():\n    return 'Hello, World!'\n\nif __name__ == '__main__':\n    app.run(debug=True)",
+                                "requirements.txt": "Flask==2.3.3"
+                            }
+                        }
+                    },
+                    {
+                        "name": "React Frontend",
+                        "description": "Modern React application",
+                        "language": "javascript",
+                        "framework": "react",
+                        "template_data": {
+                            "files": {
+                                "src/App.js": "import React from 'react';\n\nfunction App() {\n  return (\n    <div className=\"App\">\n      <h1>Hello React!</h1>\n    </div>\n  );\n}\n\nexport default App;",
+                                "package.json": '{\n  "name": "react-app",\n  "version": "1.0.0",\n  "dependencies": {\n    "react": "^18.0.0",\n    "react-dom": "^18.0.0"\n  }\n}'
+                            }
+                        }
+                    }
+                ]
+                
+                for template_data in default_templates:
+                    template = ProjectTemplate(**template_data)
+                    db.add(template)
+                
+                db.commit()
+                logger.info("Default templates inserted successfully!")
             
-            # You can add default users, settings, etc. here
-            # Example:
-            # default_user = User(
-            #     username="admin",
-            #     email="admin@example.com",
-            #     hashed_password="hashed_password_here"
-            # )
-            # db.add(default_user)
-            # db.commit()
-            
-        db.close()
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Failed to insert default data: {e}")
+        finally:
+            db.close()
         
     except Exception as e:
         logger.warning(f"Failed to insert default data: {e}")
