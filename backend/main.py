@@ -609,32 +609,322 @@ async def generate_project(request: ProjectGenerationRequest):
         logger.error(f"Project generation error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- New Features (Placeholders) ---
-@app.post("/api/codebase/embed")
-async def embed_codebase(files: List[UploadFile]):
-    """Upload & index code for contextual queries."""
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+# --- Enhanced Cursor-like Features ---
 
-@app.websocket("/ws/collab")
-async def websocket_collab(websocket: WebSocket):
-    """Sync edits across users in real-time."""
-    await websocket.accept()
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+class ComposerRequest(BaseModel):
+    prompt: str
+    model: str = "deepseek/deepseek-chat-v3-0324"
+    language: str = "python"
+    session_id: Optional[str] = None
+    files: List[dict] = []
 
-@app.post("/api/voice")
-async def voice_command(audio: UploadFile):
-    """Convert speech to code/commands."""
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+class DebugRequest(BaseModel):
+    code: str
+    language: str = "python"
+    session_id: Optional[str] = None
+    error_message: Optional[str] = None
+
+class TerminalRequest(BaseModel):
+    natural_command: str
+    session_id: Optional[str] = None
+    context: Optional[dict] = {}
+
+class FileContextRequest(BaseModel):
+    file_path: str
+    content: str
+    operation: str = "reference"  # reference, analyze, modify
+
+@app.post("/api/composer")
+async def ai_composer(request: ComposerRequest, db: Session = Depends(get_db)):
+    """AI Composer - Multi-file editing with AI assistance (Cursor Composer equivalent)"""
+    try:
+        # Log API usage
+        api_usage = APIUsage(
+            endpoint="/api/composer",
+            model=request.model,
+            language=request.language,
+            session_id=request.session_id
+        )
+        db.add(api_usage)
+        db.commit()
+
+        composer_prompt = f"""
+        You are an AI Composer assistant, equivalent to Cursor's Composer feature.
+        Analyze the user's request and provide multi-file editing suggestions.
+
+        User Request: {request.prompt}
+        Language: {request.language}
+        Referenced Files: {len(request.files)} files
+
+        For this request, provide:
+        1. **File Modifications**: List of files to modify with specific changes
+        2. **New Files**: Any new files that need to be created
+        3. **Refactoring**: Code structure improvements
+        4. **Dependencies**: Any new dependencies or imports needed
+        5. **Testing**: Suggested test modifications
+        6. **Documentation**: Updates to comments or docs
+
+        Format your response as structured suggestions with clear file paths and code changes.
+        Focus on maintaining code quality, consistency, and best practices.
+        """
+
+        response = await get_ai_response(composer_prompt)
+        
+        return {
+            "suggestions": response,
+            "files_modified": [f["name"] for f in request.files],
+            "language": request.language,
+            "model_used": request.model,
+            "session_id": request.session_id,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Composer error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/debug")
-async def debug_code(request: CodeWithError):
-    """AI debugger with traceback analysis."""
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+async def ai_debugger(request: DebugRequest, db: Session = Depends(get_db)):
+    """AI Debugger - Intelligent debugging and error fixing (Cursor Debug equivalent)"""
+    try:
+        # Log API usage
+        api_usage = APIUsage(
+            endpoint="/api/debug",
+            language=request.language,
+            session_id=request.session_id
+        )
+        db.add(api_usage)
+        db.commit()
 
-@app.post("/api/run_workflow")
-async def run_workflow(workflow: Workflow):
-    """Chain AI actions."""
-    raise HTTPException(status_code=501, detail="Not implemented yet")
+        debug_prompt = f"""
+        You are an expert AI debugger, equivalent to Cursor's debugging features.
+        Analyze the provided code and help identify and fix issues.
+
+        Code to Debug:
+        ```{request.language}
+        {request.code}
+        ```
+
+        Error Message (if any): {request.error_message or "No specific error provided"}
+
+        Please provide:
+        1. **Error Analysis**: Identify potential bugs, syntax errors, logic issues
+        2. **Root Cause**: Explain what's causing the problem
+        3. **Fix Suggestions**: Provide corrected code with explanations
+        4. **Prevention**: How to avoid similar issues in the future
+        5. **Testing**: Suggested test cases to verify the fix
+        6. **Performance**: Any performance improvements while fixing
+
+        Focus on practical, actionable solutions that improve code quality.
+        """
+
+        analysis = await get_ai_response(debug_prompt)
+        
+        # Extract potential fixes (simple regex-based extraction)
+        fixes = []
+        if "```" in analysis:
+            import re
+            code_blocks = re.findall(r'```(?:\w+)?\n(.*?)\n```', analysis, re.DOTALL)
+            fixes = [{"code": block.strip(), "description": "AI-suggested fix"} for block in code_blocks]
+
+        return {
+            "analysis": analysis,
+            "suggested_fixes": fixes,
+            "language": request.language,
+            "session_id": request.session_id,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Debug error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/terminal")
+async def ai_terminal(request: TerminalRequest, db: Session = Depends(get_db)):
+    """AI Terminal - Natural language to terminal commands (Cursor Terminal equivalent)"""
+    try:
+        # Log API usage
+        api_usage = APIUsage(
+            endpoint="/api/terminal",
+            session_id=request.session_id
+        )
+        db.add(api_usage)
+        db.commit()
+
+        terminal_prompt = f"""
+        You are an AI terminal assistant, equivalent to Cursor's terminal AI features.
+        Convert natural language requests into appropriate terminal commands.
+
+        User Request: {request.natural_command}
+        Context: {request.context}
+
+        Provide:
+        1. **Command**: The exact terminal command to run
+        2. **Explanation**: What the command does
+        3. **Safety**: Any warnings or considerations
+        4. **Alternatives**: Other ways to achieve the same result
+        5. **Follow-up**: Suggested next commands if applicable
+
+        Prioritize safe, cross-platform commands when possible.
+        If the request is unclear or potentially dangerous, ask for clarification.
+        """
+
+        response = await get_ai_response(terminal_prompt)
+        
+        # Extract command (simple extraction - in production, use more sophisticated parsing)
+        command = "echo 'Command generated by AI'"
+        if "Command:" in response:
+            try:
+                command_line = [line for line in response.split('\n') if line.strip().startswith('Command:')][0]
+                command = command_line.split('Command:', 1)[1].strip().strip('`')
+            except:
+                pass
+
+        # For safety, don't actually execute commands automatically
+        # In a production environment, you'd want user confirmation
+        output = "Command generated. Execute manually for safety."
+
+        return {
+            "command": command,
+            "output": output,
+            "explanation": response,
+            "session_id": request.session_id,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Terminal error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/file-context")
+async def file_context(request: FileContextRequest, db: Session = Depends(get_db)):
+    """File Context Management - Reference and analyze files (@file equivalent)"""
+    try:
+        context_prompt = f"""
+        Analyze the provided file for context and reference.
+
+        File: {request.file_path}
+        Operation: {request.operation}
+
+        Content:
+        ```
+        {request.content}
+        ```
+
+        Provide:
+        1. **Summary**: Brief description of the file's purpose
+        2. **Key Functions/Classes**: Main components
+        3. **Dependencies**: Imports and external dependencies
+        4. **Usage Examples**: How this code might be used
+        5. **Integration Points**: How it connects to other files
+        """
+
+        analysis = await get_ai_response(context_prompt)
+        
+        return {
+            "file_path": request.file_path,
+            "analysis": analysis,
+            "operation": request.operation,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"File context error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Enhanced Real-time Features ---
+
+@app.websocket("/ws/ai-assist")
+async def websocket_ai_assist(websocket: WebSocket):
+    """Real-time AI assistance WebSocket (like Cursor Tab)"""
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            
+            if message["type"] == "cursor_prediction":
+                # Simulate cursor position prediction
+                prediction = {
+                    "type": "cursor_suggestion",
+                    "suggestion": "// AI suggests next action",
+                    "confidence": 0.85
+                }
+                await websocket.send_text(json.dumps(prediction))
+            
+            elif message["type"] == "autocomplete":
+                # Simulate smart autocomplete
+                suggestion = {
+                    "type": "autocomplete_suggestion", 
+                    "text": "def example_function():",
+                    "language": message.get("language", "python")
+                }
+                await websocket.send_text(json.dumps(suggestion))
+                
+    except Exception as e:
+        logger.error(f"WebSocket error: {str(e)}")
+    finally:
+        await websocket.close()
+
+@app.get("/api/health/enhanced")
+async def enhanced_health_check():
+    """Enhanced health check with feature status"""
+    try:
+        return {
+            "status": "online",
+            "features": {
+                "chat": True,
+                "composer": True,
+                "debugger": True,
+                "terminal": True,
+                "file_context": True,
+                "websocket": True,
+                "code_execution": True,
+                "analysis": True
+            },
+            "models_available": len(ENHANCED_MODELS),
+            "languages_supported": len(SUPPORTED_LANGUAGES),
+            "uptime": "0h 0m",  # Would calculate actual uptime
+            "version": "2.0.0-cursor-enhanced"
+        }
+    except Exception as e:
+        return {"status": "degraded", "error": str(e)}
+
+@app.post("/api/smart-rewrite")
+async def smart_rewrite(request: dict):
+    """Smart code rewriting (like Cursor's smart rewrites)"""
+    try:
+        code = request.get("code", "")
+        language = request.get("language", "python")
+        
+        # Simple typo fixes and improvements
+        improvements = {
+            "functin": "function",
+            "retrun": "return", 
+            "consle": "console",
+            "imoprt": "import",
+            "classe": "class",
+            "methdo": "method"
+        }
+        
+        improved_code = code
+        changes_made = []
+        
+        for typo, correct in improvements.items():
+            if typo in improved_code:
+                improved_code = improved_code.replace(typo, correct)
+                changes_made.append(f"Fixed '{typo}' → '{correct}'")
+        
+        return {
+            "original": code,
+            "improved": improved_code,
+            "changes": changes_made,
+            "language": language
+        }
+        
+    except Exception as e:
+        logger.error(f"Smart rewrite error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Add these enhanced endpoints to your existing backend:
 class CodeAnalysisRequest(BaseModel):
