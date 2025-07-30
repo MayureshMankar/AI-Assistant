@@ -76,15 +76,104 @@ SUPPORTED_LANGUAGES = {
     "bash": {"extension": ".sh", "command": ["bash"], "timeout": 5}
 }
 
-# Enhanced AI models with capabilities
+# Update the enhanced models list and add better context handling
+# Replace the existing ENHANCED_MODELS with only working free models
 ENHANCED_MODELS = {
-    "deepseek/deepseek-chat-v3-0324": {"type": "chat", "code_analysis": True, "max_tokens": 4096},
-    "deepseek/deepseek-r1": {"type": "reasoning", "code_analysis": True, "max_tokens": 8192},
-    "qwen/qwen3-coder": {"type": "code", "code_analysis": True, "max_tokens": 32768},
-    "google/gemini-2.0-flash-exp": {"type": "multimodal", "code_analysis": True, "max_tokens": 8192},
-    "mistralai/mistral-nemo": {"type": "chat", "code_analysis": True, "max_tokens": 128000},
-    "qwen/qwen-2.5-72b-instruct": {"type": "instruct", "code_analysis": True, "max_tokens": 32768},
+    "deepseek/deepseek-chat-v3-0324:free": {
+        "type": "reasoning", 
+        "code_analysis": True, 
+        "max_tokens": 32768,
+        "description": "685B-parameter MoE model for reasoning and coding"
+    },
+    "deepseek/deepseek-r1-distill-llama-70b:free": {
+        "type": "reasoning", 
+        "code_analysis": True, 
+        "max_tokens": 8192,
+        "description": "Distilled reasoning model with high performance"
+    },
+    "qwen/qwen3-30b-a3b:free": {
+        "type": "balanced", 
+        "code_analysis": True, 
+        "max_tokens": 40960,
+        "description": "MoE model with thinking and non-thinking modes"
+    },
+    "qwen/qwen3-14b:free": {
+        "type": "balanced", 
+        "code_analysis": True, 
+        "max_tokens": 40960,
+        "description": "Dense model for reasoning and dialogue"
+    },
+    "qwen/qwen3-8b:free": {
+        "type": "fast", 
+        "code_analysis": True, 
+        "max_tokens": 40960,
+        "description": "Efficient model for coding and multilingual tasks"
+    },
+    "qwen/qwen3-4b:free": {
+        "type": "fast", 
+        "code_analysis": True, 
+        "max_tokens": 40960,
+        "description": "Lightweight model for quick responses"
+    },
+    "qwen/qwq-32b:free": {
+        "type": "reasoning", 
+        "code_analysis": True, 
+        "max_tokens": 32768,
+        "description": "Specialized reasoning model for complex problems"
+    },
+    "google/gemini-2.0-flash-exp:free": {
+        "type": "multimodal", 
+        "code_analysis": True, 
+        "max_tokens": 1048576,
+        "description": "Fast multimodal model with enhanced capabilities"
+    }
 }
+
+# Language detection patterns for auto-detection
+LANGUAGE_PATTERNS = {
+    'python': [r'def\s+\w+', r'import\s+\w+', r'from\s+\w+\s+import', r'class\s+\w+', r'#.*python'],
+    'javascript': [r'function\s+\w+', r'const\s+\w+', r'let\s+\w+', r'var\s+\w+', r'=>\s*{', r'console\.log'],
+    'typescript': [r'interface\s+\w+', r'type\s+\w+', r':\s*string', r':\s*number', r':\s*boolean'],
+    'java': [r'public\s+class', r'public\s+static\s+void\s+main', r'System\.out\.println', r'import\s+java\.'],
+    'cpp': [r'#include\s*<', r'using\s+namespace', r'int\s+main', r'cout\s*<<', r'std::'],
+    'c': [r'#include\s*<', r'int\s+main', r'printf\s*\(', r'scanf\s*\('],
+    'go': [r'package\s+main', r'func\s+main', r'import\s+\(', r'fmt\.Print'],
+    'rust': [r'fn\s+main', r'let\s+mut', r'use\s+std::', r'println!'],
+    'php': [r'<\?php', r'echo\s+', r'\$\w+', r'function\s+\w+'],
+    'ruby': [r'def\s+\w+', r'puts\s+', r'class\s+\w+', r'require\s+'],
+    'bash': [r'#!/bin/bash', r'echo\s+', r'if\s+\[', r'for\s+\w+\s+in'],
+    'html': [r'<html', r'<head', r'<body', r'<div', r'<script'],
+    'css': [r'\.\w+\s*{', r'#\w+\s*{', r'@media', r'font-family:'],
+    'sql': [r'SELECT\s+', r'FROM\s+', r'WHERE\s+', r'INSERT\s+INTO', r'CREATE\s+TABLE'],
+    'json': [r'{\s*"', r'\[\s*{', r'":\s*"'],
+    'yaml': [r'---', r':\s*$', r'^\s*-\s+'],
+    'markdown': [r'^#\s+', r'^\*\s+', r'\[.*\]\(.*\)', r'```']
+}
+
+def detect_language(code):
+    """Auto-detect programming language from code content"""
+    if not code or len(code.strip()) < 10:
+        return 'text'
+    
+    lines = code.split('\n')[:10]  # Check first 10 lines
+    scores = {}
+    
+    for lang, patterns in LANGUAGE_PATTERNS.items():
+        scores[lang] = 0
+        for pattern in patterns:
+            for line in lines:
+                if re.search(pattern, line, re.IGNORECASE):
+                    scores[lang] += 1
+    
+    if not scores:
+        return 'text'
+    
+    max_score = max(scores.values())
+    if max_score == 0:
+        return 'text'
+    
+    detected_lang = max(scores, key=scores.get)
+    return detected_lang
 
 # Enhanced rate limiting with user-based limits
 RATE_LIMITS = {
@@ -258,110 +347,255 @@ async def root():
         ]
     }
 
+# Update health check to show only working free models
 @app.get("/api/health")
-async def enhanced_health_check():
-    """Enhanced health check with system status"""
+async def health_check():
+    """Health check with working free models information"""
     try:
-        # Test AI API
-        ai_status = "online" if OPENROUTER_API_KEY else "offline"
-        
-        # Test database (if configured)
-        db_status = "offline"
-        try:
-            db = SessionLocal()
-            db.execute("SELECT 1")
-            db.close()
-            db_status = "online"
-        except:
-            pass
-        
         return {
-            "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
-            "services": {
-                "ai_api": ai_status,
-                "database": db_status,
-                "file_system": "online"
+            "status": "online",
+            "version": "2.0.0-vscode-edition",
+            "features": {
+                "chat": True,
+                "code_analysis": True,
+                "auto_language_detection": True,
+                "context_handling": True,
+                "free_models": True
             },
-            "supported_languages": list(SUPPORTED_LANGUAGES.keys()),
-            "available_models": list(ENHANCED_MODELS.keys())
+            "free_models": list(ENHANCED_MODELS.keys()),
+            "models_count": len(ENHANCED_MODELS),
+            "supported_languages": list(LANGUAGE_PATTERNS.keys()),
+            "max_context": max(model['max_tokens'] for model in ENHANCED_MODELS.values()),
+            "timestamp": datetime.utcnow().isoformat()
         }
     except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
-        raise HTTPException(status_code=503, detail="Service unhealthy")
+        return {
+            "status": "degraded", 
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
+# Add endpoint to get available free models
 @app.get("/api/models")
-async def list_enhanced_models():
-    """List available AI models with capabilities"""
+async def get_free_models():
+    """Get list of available free models"""
     return {
         "models": [
             {
                 "id": model_id,
-                "name": model_id.split("/")[-1],
-                "type": config["type"],
-                "code_analysis": config["code_analysis"],
-                "max_tokens": config["max_tokens"]
+                "name": model_id.split('/')[-1].replace(':free', '').replace('-', ' ').title(),
+                "type": model_info["type"],
+                "max_tokens": model_info["max_tokens"],
+                "description": model_info["description"],
+                "free": True,
+                "code_analysis": model_info["code_analysis"]
             }
-            for model_id, config in ENHANCED_MODELS.items()
+            for model_id, model_info in ENHANCED_MODELS.items()
         ],
-        "languages": list(SUPPORTED_LANGUAGES.keys())
+        "total": len(ENHANCED_MODELS),
+        "timestamp": datetime.utcnow().isoformat()
     }
+
+# Auto language detection endpoint
+@app.post("/api/detect-language")
+async def detect_language_endpoint(request: dict):
+    """Auto-detect programming language from code"""
+    try:
+        code = request.get("code", "")
+        if not code:
+            return {"language": "text", "confidence": 0}
+        
+        detected = detect_language(code)
+        
+        # Calculate confidence based on pattern matches
+        lines = code.split('\n')[:10]
+        patterns = LANGUAGE_PATTERNS.get(detected, [])
+        matches = 0
+        
+        for pattern in patterns:
+            for line in lines:
+                if re.search(pattern, line, re.IGNORECASE):
+                    matches += 1
+        
+        confidence = min(matches / max(len(patterns), 1), 1.0)
+        
+        return {
+            "language": detected,
+            "confidence": confidence,
+            "total_patterns": len(patterns) if detected in LANGUAGE_PATTERNS else 0,
+            "matches_found": matches
+        }
+    except Exception as e:
+        return {"language": "text", "confidence": 0, "error": str(e)}
 
 @app.post("/api/chat")
 async def enhanced_chat(request: EnhancedChatRequest, db: Session = Depends(get_db)):
-    """Enhanced chat with session management and context awareness"""
+    """Enhanced chat with improved context handling for VS Code IDE interface"""
     try:
-        # Create or get session
-        session_id = request.session_id or str(uuid.uuid4())
+        # Log API usage
+        api_usage = APIUsage(
+            endpoint="/api/chat",
+            model=request.model,
+            session_id=request.session_id
+        )
+        db.add(api_usage)
+        db.commit()
         
-        # Build enhanced prompt with context
-        context_prompt = ""
-        if request.context:
-            context_prompt = f"Context: {json.dumps(request.context)}\n\n"
+        # Check if model is in our free models list
+        if request.model not in ENHANCED_MODELS:
+            # Fallback to default free model
+            request.model = "deepseek/deepseek-chat-v3-0324:free"
         
-        full_prompt = f"{context_prompt}User Query: {request.message}"
+        model_info = ENHANCED_MODELS[request.model]
         
-        # Get AI response
-        ai_response = await get_ai_response(
-            full_prompt,
-            request.model,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens
+        # Build enhanced context for VS Code IDE
+        context_parts = []
+        
+        # Add system context
+        system_context = f"""You are an expert AI coding assistant integrated into a VS Code-like IDE environment.
+
+Environment Details:
+- IDE: VS Code-like interface with file explorer, editor, and AI assistant
+- Model: {request.model} ({model_info['description']})
+- Auto language detection: Enabled
+- Context limit: {model_info['max_tokens']} tokens
+- Free model with full capabilities
+
+Your capabilities:
+- Code analysis and debugging across all programming languages
+- Auto-detect programming languages from code snippets
+- Provide detailed explanations and solutions
+- Generate, refactor, and optimize code
+- Best practices and code review
+- Multi-file project assistance
+- Context-aware responses based on conversation history
+
+Guidelines:
+- Use markdown code blocks with language specification
+- Provide practical, actionable advice
+- Explain your reasoning
+- Be concise but thorough
+- Maintain conversation context
+- Focus on code quality and best practices"""
+        
+        context_parts.append(system_context)
+        
+        # Add file context if available
+        if hasattr(request, 'context') and request.context:
+            context_data = request.context
+            
+            # Add conversation history
+            if 'conversation_history' in context_data:
+                history = context_data['conversation_history']
+                if isinstance(history, list) and len(history) > 0:
+                    context_parts.append("\nConversation History:")
+                    for msg in history[-10:]:  # Last 10 messages
+                        if isinstance(msg, dict) and 'role' in msg and 'content' in msg:
+                            role = msg['role'].upper()
+                            content = msg['content'][:500] + "..." if len(msg['content']) > 500 else msg['content']
+                            context_parts.append(f"{role}: {content}")
+            
+            # Add file context
+            if 'files' in context_data and context_data['files']:
+                context_parts.append(f"\nProject Files ({len(context_data['files'])}):")
+                for file_info in context_data['files'][:5]:  # Limit to 5 files
+                    if isinstance(file_info, dict):
+                        name = file_info.get('name', 'unknown')
+                        lang = file_info.get('language', 'unknown')
+                        context_parts.append(f"- {name} ({lang})")
+            
+            # Add active file context
+            if 'active_file' in context_data and context_data['active_file']:
+                context_parts.append(f"\nActive File: {context_data['active_file']}")
+            
+            # Add editor content context (limited)
+            if 'editor_content' in context_data and context_data['editor_content']:
+                editor_content = context_data['editor_content']
+                detected_lang = detect_language(editor_content)
+                context_parts.append(f"\nEditor Content ({detected_lang}):")
+                context_parts.append(f"```{detected_lang}\n{editor_content}\n```")
+        
+        # Combine all context
+        full_context = "\n".join(context_parts)
+        
+        # Prepare the enhanced message
+        enhanced_message = f"{full_context}\n\nUser Question: {request.message}"
+        
+        # Limit total context size to prevent token overflow
+        max_context_length = model_info['max_tokens'] - 1000  # Reserve space for response
+        if len(enhanced_message) > max_context_length:
+            # Truncate context but keep user message
+            truncated_context = full_context[:max_context_length - len(request.message) - 100]
+            enhanced_message = f"{truncated_context}\n...\n\nUser Question: {request.message}"
+        
+        # Call OpenRouter API
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY")
         )
         
-        # Save to database (if available)
-        try:
-            # Save user message
-            user_msg = ChatMessage(
-                session_id=session_id,
-                role="user",
-                content=request.message,
-                model_used=request.model
-            )
-            db.add(user_msg)
-            
-            # Save AI response
-            ai_msg = ChatMessage(
-                session_id=session_id,
-                role="assistant",
-                content=ai_response,
-                model_used=request.model
-            )
-            db.add(ai_msg)
-            db.commit()
-        except Exception as db_error:
-            logger.warning(f"Database save failed: {db_error}")
+        response = client.chat.completions.create(
+            model=request.model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": enhanced_message
+                }
+            ],
+            temperature=request.temperature,
+            max_tokens=min(4000, model_info['max_tokens'] // 2),  # Conservative limit
+            stream=False
+        )
+        
+        ai_response = response.choices[0].message.content
+        
+        # Store conversation in database
+        chat_session = ChatSession(
+            session_id=request.session_id,
+            user_message=request.message,
+            ai_response=ai_response,
+            model_used=request.model,
+            context_data=request.context
+        )
+        db.add(chat_session)
+        db.commit()
         
         return {
             "response": ai_response,
-            "session_id": session_id,
             "model_used": request.model,
+            "session_id": request.session_id,
+            "context_included": bool(hasattr(request, 'context') and request.context),
+            "detected_language": detect_language(request.message) if '```' in request.message else None,
             "timestamp": datetime.utcnow().isoformat()
         }
         
     except Exception as e:
-        logger.error(f"Chat error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Enhanced chat error: {str(e)}")
+        # Fallback response for better user experience
+        fallback_response = f"""I apologize, but I encountered an error processing your request. 
+
+Error details: {str(e)}
+
+However, I'm still here to help! Please try:
+1. Simplifying your question
+2. Breaking it into smaller parts
+3. Providing specific code examples
+
+I can assist with:
+- Code debugging and analysis
+- Programming questions
+- Best practices
+- Code generation and refactoring
+
+What would you like help with?"""
+        
+        return {
+            "response": fallback_response,
+            "model_used": request.model,
+            "session_id": request.session_id,
+            "error": True,
+            "timestamp": datetime.utcnow().isoformat()
+        }
 
 @app.post("/api/execute")
 async def enhanced_code_execution(request: EnhancedCodeExecutionRequest, db: Session = Depends(get_db)):

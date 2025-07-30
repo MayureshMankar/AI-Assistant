@@ -1,0 +1,299 @@
+{
+  "name": "ai-coding-assistant",
+  "displayName": "AI Coding Assistant Pro",
+  "description": "Professional AI-powered coding assistant with context awareness and free models",
+  "version": "2.0.0",
+  "publisher": "ai-assistant-pro",
+  "author": {
+    "name": "AI Assistant Pro Team"
+  },
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Other",
+    "Snippets",
+    "Debuggers",
+    "Linters"
+  ],
+  "keywords": [
+    "ai",
+    "assistant",
+    "coding",
+    "openrouter",
+    "free",
+    "debug",
+    "refactor",
+    "context"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/ai-coding-assistant"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/ai-coding-assistant/issues"
+  },
+  "license": "MIT",
+  "main": "./out/extension.js",
+  "icon": "resources/icon.png",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiAssistant.openChat",
+        "title": "Open AI Chat",
+        "category": "AI Assistant",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "aiAssistant.analyzeCode",
+        "title": "Analyze Current File",
+        "category": "AI Assistant",
+        "icon": "$(search)"
+      },
+      {
+        "command": "aiAssistant.debugCode",
+        "title": "Debug Code",
+        "category": "AI Assistant",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "aiAssistant.refactorCode",
+        "title": "Refactor Code",
+        "category": "AI Assistant",
+        "icon": "$(symbol-keyword)"
+      },
+      {
+        "command": "aiAssistant.explainCode",
+        "title": "Explain Code",
+        "category": "AI Assistant",
+        "icon": "$(question)"
+      },
+      {
+        "command": "aiAssistant.generateCode",
+        "title": "Generate Code",
+        "category": "AI Assistant",
+        "icon": "$(add)"
+      },
+      {
+        "command": "aiAssistant.switchModel",
+        "title": "Switch AI Model",
+        "category": "AI Assistant",
+        "icon": "$(gear)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "submenu": "aiAssistant.contextMenu",
+          "group": "navigation"
+        }
+      ],
+      "aiAssistant.contextMenu": [
+        {
+          "command": "aiAssistant.explainCode",
+          "when": "editorHasSelection",
+          "group": "analysis"
+        },
+        {
+          "command": "aiAssistant.debugCode",
+          "when": "editorHasSelection",
+          "group": "analysis"
+        },
+        {
+          "command": "aiAssistant.refactorCode",
+          "when": "editorHasSelection",
+          "group": "modify"
+        },
+        {
+          "command": "aiAssistant.generateCode",
+          "group": "generate"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "aiAssistant.switchModel",
+          "when": "view == aiAssistant.chatView",
+          "group": "navigation"
+        }
+      ]
+    },
+    "submenus": [
+      {
+        "id": "aiAssistant.contextMenu",
+        "label": "AI Assistant"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiAssistant",
+          "title": "AI Assistant",
+          "icon": "$(robot)"
+        }
+      ]
+    },
+    "views": {
+      "aiAssistant": [
+        {
+          "type": "webview",
+          "id": "aiAssistant.chatView",
+          "name": "AI Chat",
+          "when": "true"
+        },
+        {
+          "id": "aiAssistant.modelsView",
+          "name": "Available Models",
+          "when": "true"
+        },
+        {
+          "id": "aiAssistant.contextView",
+          "name": "Context Files",
+          "when": "true"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AI Assistant",
+      "properties": {
+        "aiAssistant.openrouterApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenRouter API Key for AI models (get free key at openrouter.ai)",
+          "order": 1
+        },
+        "aiAssistant.defaultModel": {
+          "type": "string",
+          "default": "deepseek/deepseek-chat-v3-0324:free",
+          "enum": [
+            "deepseek/deepseek-chat-v3-0324:free",
+            "deepseek/deepseek-r1-distill-llama-70b:free",
+            "qwen/qwen3-30b-a3b:free",
+            "qwen/qwen3-14b:free",
+            "qwen/qwen3-8b:free",
+            "qwen/qwen3-4b:free",
+            "qwen/qwq-32b:free",
+            "google/gemini-2.0-flash-exp:free"
+          ],
+          "description": "Default AI model to use (all models are free)",
+          "order": 2
+        },
+        "aiAssistant.autoDetectLanguage": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect programming language from code",
+          "order": 3
+        },
+        "aiAssistant.contextAwareness": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include file context and conversation history in AI requests",
+          "order": 4
+        },
+        "aiAssistant.maxContextFiles": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of files to include in context",
+          "order": 5
+        },
+        "aiAssistant.temperature": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "AI response creativity (0 = deterministic, 2 = very creative)",
+          "order": 6
+        },
+        "aiAssistant.autoSaveConversations": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically save chat conversations",
+          "order": 7
+        },
+        "aiAssistant.showInlineCodeActions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show AI code actions in editor gutter",
+          "order": 8
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "aiAssistant.openChat",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a"
+      },
+      {
+        "command": "aiAssistant.explainCode",
+        "key": "ctrl+shift+e",
+        "mac": "cmd+shift+e",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "aiAssistant.debugCode",
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "aiAssistant.refactorCode",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "aiAssistant.generateCode",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g"
+      }
+    ],
+    "colors": [
+      {
+        "id": "aiAssistant.chatBackground",
+        "description": "Background color for AI chat panel",
+        "defaults": {
+          "dark": "#1e1e1e",
+          "light": "#ffffff"
+        }
+      },
+      {
+        "id": "aiAssistant.codeBackground",
+        "description": "Background color for code blocks in chat",
+        "defaults": {
+          "dark": "#0d1117",
+          "light": "#f6f8fa"
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "eslint": "^8.28.0",
+    "typescript": "^4.9.4",
+    "@vscode/test-electron": "^2.2.0",
+    "@vscode/vsce": "^2.15.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "marked": "^5.0.0"
+  }
+}
