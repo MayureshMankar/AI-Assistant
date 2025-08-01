@@ -12,61 +12,96 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 // Free working models from OpenRouter (verified)
 const FREE_MODELS = [
-  { 
-    id: 'deepseek/deepseek-chat-v3-0324:free', 
-    name: 'DeepSeek V3', 
-    type: 'reasoning', 
-    context: '32K',
-    description: '685B-parameter MoE model for reasoning and coding'
+  {
+    id: 'google/gemini-2.0-flash-exp:free',
+    name: 'Gemini 2.0 Flash Experimental',
+    type: 'multimodal',
+    context: '1,048,576',
+    description: 'Google: Gemini 2.0 Flash Experimental (free)'
   },
-  { 
-    id: 'deepseek/deepseek-r1-distill-llama-70b:free', 
-    name: 'DeepSeek R1 Distill 70B', 
-    type: 'reasoning', 
-    context: '8K',
-    description: 'Distilled reasoning model with high performance'
+  {
+    id: 'qwen/qwen3-coder:free',
+    name: 'Qwen3 Coder',
+    type: 'programming',
+    context: '262,144',
+    description: 'Qwen: Qwen3 Coder (free)'
   },
-  { 
-    id: 'qwen/qwen3-30b-a3b:free', 
-    name: 'Qwen3 30B A3B', 
-    type: 'balanced', 
-    context: '40K',
-    description: 'MoE model with thinking and non-thinking modes'
+  {
+    id: 'tngtech/deepseek-r1t2-chimera:free',
+    name: 'DeepSeek R1T2 Chimera',
+    type: 'reasoning',
+    context: '163,840',
+    description: 'TNG: DeepSeek R1T2 Chimera (free)'
   },
-  { 
-    id: 'qwen/qwen3-14b:free', 
-    name: 'Qwen3 14B', 
-    type: 'balanced', 
-    context: '40K',
-    description: 'Dense model for reasoning and dialogue'
+  {
+    id: 'deepseek/deepseek-r1-0528:free',
+    name: 'DeepSeek R1 0528',
+    type: 'reasoning',
+    context: '163,840',
+    description: 'DeepSeek: R1 0528 (free)'
   },
-  { 
-    id: 'qwen/qwen3-8b:free', 
-    name: 'Qwen3 8B', 
-    type: 'fast', 
-    context: '40K',
-    description: 'Efficient model for coding and multilingual tasks'
+  {
+    id: 'tngtech/deepseek-r1t-chimera:free',
+    name: 'DeepSeek R1T Chimera',
+    type: 'reasoning',
+    context: '163,840',
+    description: 'TNG: DeepSeek R1T Chimera (free)'
   },
-  { 
-    id: 'qwen/qwen3-4b:free', 
-    name: 'Qwen3 4B', 
-    type: 'fast', 
-    context: '40K',
-    description: 'Lightweight model for quick responses'
+  {
+    id: 'microsoft/mai-ds-r1:free',
+    name: 'MAI DS R1',
+    type: 'reasoning',
+    context: '163,840',
+    description: 'Microsoft: MAI DS R1 (free)'
   },
-  { 
-    id: 'qwen/qwq-32b:free', 
-    name: 'QwQ 32B', 
-    type: 'reasoning', 
-    context: '32K',
-    description: 'Specialized reasoning model for complex problems'
+  {
+    id: 'deepseek/deepseek-r1:free',
+    name: 'DeepSeek R1',
+    type: 'reasoning',
+    context: '163,840',
+    description: 'DeepSeek: R1 (free)'
   },
-  { 
-    id: 'google/gemini-2.0-flash-exp:free', 
-    name: 'Gemini 2.0 Flash', 
-    type: 'multimodal', 
-    context: '1M',
-    description: 'Fast multimodal model with enhanced capabilities'
+  {
+    id: 'z-ai/glm-4.5-air:free',
+    name: 'GLM 4.5 Air',
+    type: 'reasoning',
+    context: '131,072',
+    description: 'Z.AI: GLM 4.5 Air (free)'
+  },
+  {
+    id: 'moonshotai/kimi-dev-72b:free',
+    name: 'Kimi Dev 72b',
+    type: 'reasoning',
+    context: '131,072',
+    description: 'Kimi Dev 72b (free)'
+  },
+  {
+    id: 'deepseek/deepseek-r1-0528-qwen3-8b:free',
+    name: 'Deepseek R1 0528 Qwen3 8B',
+    type: 'reasoning',
+    context: '131,072',
+    description: 'Deepseek R1 0528 Qwen3 8B (free)'
+  },
+  {
+    id: 'qwen/qwen3-235b-a22b:free',
+    name: 'Qwen3 235B A22B',
+    type: 'reasoning',
+    context: '131,072',
+    description: 'Qwen: Qwen3 235B A22B (free)'
+  },
+  {
+    id: 'moonshotai/kimi-vl-a3b-thinking:free',
+    name: 'Kimi VL A3B Thinking',
+    type: 'reasoning',
+    context: '131,072',
+    description: 'Moonshot AI: Kimi VL A3B Thinking (free)'
+  },
+  {
+    id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1:free',
+    name: 'Llama 3.1 Nemotron Ultra 253B v1',
+    type: 'reasoning',
+    context: '131,072',
+    description: 'NVIDIA: Llama 3.1 Nemotron Ultra 253B v1 (free)'
   }
 ];
 
@@ -93,7 +128,7 @@ const LANGUAGE_PATTERNS = {
   rust: [/fn\s+main/, /let\s+mut/, /use\s+std::/, /println!/],
   php: [/<\?php/, /echo\s+/, /\$\w+/, /function\s+\w+/],
   ruby: [/def\s+\w+/, /puts\s+/, /class\s+\w+/, /require\s+/],
-  bash: [/#!/bin/bash/, /echo\s+/, /if\s+\[/, /for\s+\w+\s+in/],
+  bash: [/#!\/bin\/bash/, /echo\s+/, /if\s+\[/, /for\s+\w+\s+in/],
   html: [/<html/, /<head/, /<body/, /<div/, /<script/],
   css: [/\.\w+\s*{/, /#\w+\s*{/, /@media/, /font-family:/],
   sql: [/SELECT\s+/, /FROM\s+/, /WHERE\s+/, /INSERT\s+INTO/, /CREATE\s+TABLE/i],
@@ -393,7 +428,17 @@ const VSCodeIDE = () => {
   const [activeFile, setActiveFile] = useState(null);
   const [editorContent, setEditorContent] = useState('');
   const [conversationContext, setConversationContext] = useState([]);
-  const [sessionId] = useState(`session_${Date.now()}`);
+  // Session ID state, always a valid UUID
+  const [sessionId, setSessionId] = useState(() => {
+    let id = localStorage.getItem('sessionId');
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!id || !uuidRegex.test(id)) {
+      id = generateUUID();
+      localStorage.setItem('sessionId', id);
+    }
+    return id;
+  });
 
   // Refs
   const messagesEndRef = useRef(null);
@@ -826,5 +871,13 @@ Guidelines:
     </div>
   );
 };
+
+// UUID v4 generator
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 export default VSCodeIDE;

@@ -81,9 +81,10 @@ class FileUpload(Base):
 
 class APIUsage(Base):
     __tablename__ = "api_usage"
-    
+
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=True, index=True)  # ✅ Add this
     endpoint = Column(String(100), nullable=False)
     method = Column(String(10), nullable=False)
     status_code = Column(Integer)
@@ -91,6 +92,7 @@ class APIUsage(Base):
     tokens_used = Column(Integer)
     model_used = Column(String(100))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class ProjectTemplate(Base):
     __tablename__ = "project_templates"

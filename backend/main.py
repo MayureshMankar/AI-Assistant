@@ -28,6 +28,9 @@ from sqlalchemy.orm import Session
 from database import get_db, SessionLocal
 from models import ChatSession, ChatMessage, CodeExecution, CodeAnalysis, FileUpload, APIUsage
 import logging
+from uuid import UUID
+import traceback
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -76,56 +79,85 @@ SUPPORTED_LANGUAGES = {
     "bash": {"extension": ".sh", "command": ["bash"], "timeout": 5}
 }
 
-# Update the enhanced models list and add better context handling
 # Replace the existing ENHANCED_MODELS with only working free models
 ENHANCED_MODELS = {
-    "deepseek/deepseek-chat-v3-0324:free": {
-        "type": "reasoning", 
-        "code_analysis": True, 
-        "max_tokens": 32768,
-        "description": "685B-parameter MoE model for reasoning and coding"
-    },
-    "deepseek/deepseek-r1-distill-llama-70b:free": {
-        "type": "reasoning", 
-        "code_analysis": True, 
-        "max_tokens": 8192,
-        "description": "Distilled reasoning model with high performance"
-    },
-    "qwen/qwen3-30b-a3b:free": {
-        "type": "balanced", 
-        "code_analysis": True, 
-        "max_tokens": 40960,
-        "description": "MoE model with thinking and non-thinking modes"
-    },
-    "qwen/qwen3-14b:free": {
-        "type": "balanced", 
-        "code_analysis": True, 
-        "max_tokens": 40960,
-        "description": "Dense model for reasoning and dialogue"
-    },
-    "qwen/qwen3-8b:free": {
-        "type": "fast", 
-        "code_analysis": True, 
-        "max_tokens": 40960,
-        "description": "Efficient model for coding and multilingual tasks"
-    },
-    "qwen/qwen3-4b:free": {
-        "type": "fast", 
-        "code_analysis": True, 
-        "max_tokens": 40960,
-        "description": "Lightweight model for quick responses"
-    },
-    "qwen/qwq-32b:free": {
-        "type": "reasoning", 
-        "code_analysis": True, 
-        "max_tokens": 32768,
-        "description": "Specialized reasoning model for complex problems"
-    },
     "google/gemini-2.0-flash-exp:free": {
-        "type": "multimodal", 
-        "code_analysis": True, 
+        "type": "multimodal",
+        "code_analysis": True,
         "max_tokens": 1048576,
-        "description": "Fast multimodal model with enhanced capabilities"
+        "description": "Google: Gemini 2.0 Flash Experimental (free)"
+    },
+    "qwen/qwen3-coder:free": {
+        "type": "programming",
+        "code_analysis": True,
+        "max_tokens": 262144,
+        "description": "Qwen: Qwen3 Coder (free)"
+    },
+    "tngtech/deepseek-r1t2-chimera:free": {
+        "type": "reasoning",
+        "code_analysis": True,
+        "max_tokens": 163840,
+        "description": "TNG: DeepSeek R1T2 Chimera (free)"
+    },
+    "deepseek/deepseek-r1-0528:free": {
+        "type": "reasoning",
+        "code_analysis": True,
+        "max_tokens": 163840,
+        "description": "DeepSeek: R1 0528 (free)"
+    },
+    "tngtech/deepseek-r1t-chimera:free": {
+        "type": "reasoning",
+        "code_analysis": True,
+        "max_tokens": 163840,
+        "description": "TNG: DeepSeek R1T Chimera (free)"
+    },
+    "microsoft/mai-ds-r1:free": {
+        "type": "reasoning",
+        "code_analysis": True,
+        "max_tokens": 163840,
+        "description": "Microsoft: MAI DS R1 (free)"
+    },
+    "deepseek/deepseek-r1:free": {
+        "type": "reasoning",
+        "code_analysis": True,
+        "max_tokens": 163840,
+        "description": "DeepSeek: R1 (free)"
+    },
+    "z-ai/glm-4.5-air:free": {
+        "type": "reasoning",
+        "code_analysis": True,
+        "max_tokens": 131072,
+        "description": "Z.AI: GLM 4.5 Air (free)"
+    },
+    "moonshotai/kimi-dev-72b:free": {
+        "type": "reasoning",
+        "code_analysis": True,
+        "max_tokens": 131072,
+        "description": "Kimi Dev 72b (free)"
+    },
+    "deepseek/deepseek-r1-0528-qwen3-8b:free": {
+        "type": "reasoning",
+        "code_analysis": True,
+        "max_tokens": 131072,
+        "description": "Deepseek R1 0528 Qwen3 8B (free)"
+    },
+    "qwen/qwen3-235b-a22b:free": {
+        "type": "reasoning",
+        "code_analysis": True,
+        "max_tokens": 131072,
+        "description": "Qwen: Qwen3 235B A22B (free)"
+    },
+    "moonshotai/kimi-vl-a3b-thinking:free": {
+        "type": "reasoning",
+        "code_analysis": True,
+        "max_tokens": 131072,
+        "description": "Moonshot AI: Kimi VL A3B Thinking (free)"
+    },
+    "nvidia/llama-3.1-nemotron-ultra-253b-v1:free": {
+        "type": "reasoning",
+        "code_analysis": True,
+        "max_tokens": 131072,
+        "description": "NVIDIA: Llama 3.1 Nemotron Ultra 253B v1 (free)"
     }
 }
 
@@ -244,7 +276,7 @@ class EnhancedChatRequest(BaseModel):
     max_tokens: Optional[int] = Field(4096, ge=1, le=32768)
 
 class EnhancedCodeExecutionRequest(BaseModel):
-    language: str = Field(..., regex="^(python|javascript|typescript|java|cpp|c|go|rust|php|ruby|bash)$")
+    language: str = Field(..., pattern="^(python|javascript|typescript|java|cpp|c|go|rust|php|ruby|bash)$")
     code: str = Field(..., min_length=1, max_length=50000)
     session_id: Optional[str] = None
     input_data: Optional[str] = None
@@ -428,27 +460,38 @@ async def detect_language_endpoint(request: dict):
     except Exception as e:
         return {"language": "text", "confidence": 0, "error": str(e)}
 
+# Set a valid default model from the current free models
+DEFAULT_MODEL = list(ENHANCED_MODELS.keys())[0]
+
 @app.post("/api/chat")
 async def enhanced_chat(request: EnhancedChatRequest, db: Session = Depends(get_db)):
     """Enhanced chat with improved context handling for VS Code IDE interface"""
     try:
-        # Log API usage
+        # ✅ Convert session_id to UUID
+        session_uuid = None
+        if request.session_id:
+            try:
+                session_uuid = UUID(str(request.session_id))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid session_id format. Must be a valid UUID.")
+        
+        # ✅ Log API usage with correct UUID
         api_usage = APIUsage(
             endpoint="/api/chat",
-            model=request.model,
-            session_id=request.session_id
+            method="POST",
+            model_used=request.model,
+            session_id=session_uuid
         )
         db.add(api_usage)
         db.commit()
         
         # Check if model is in our free models list
         if request.model not in ENHANCED_MODELS:
-            # Fallback to default free model
-            request.model = "deepseek/deepseek-chat-v3-0324:free"
+            request.model = DEFAULT_MODEL
         
         model_info = ENHANCED_MODELS[request.model]
-        
-        # Build enhanced context for VS Code IDE
+
+        # Rest of your logic
         context_parts = []
         
         # Add system context
@@ -549,16 +592,21 @@ Guidelines:
         
         ai_response = response.choices[0].message.content
         
-        # Store conversation in database
-        chat_session = ChatSession(
-            session_id=request.session_id,
-            user_message=request.message,
-            ai_response=ai_response,
-            model_used=request.model,
-            context_data=request.context
-        )
-        db.add(chat_session)
-        db.commit()
+        # Generate or use session UUID
+        session_uuid = request.session_id or uuid.uuid4()
+        
+        # Avoid duplicate session insert
+        existing_session = db.query(ChatSession).filter(ChatSession.id == session_uuid).first()
+        
+        if not existing_session:
+            chat_session = ChatSession(
+                id=session_uuid,
+                user_id=None,
+                session_name="New Session",
+                mode="chat"
+            )
+            db.add(chat_session)
+            db.commit()
         
         return {
             "response": ai_response,
@@ -570,32 +618,10 @@ Guidelines:
         }
         
     except Exception as e:
-        logger.error(f"Enhanced chat error: {str(e)}")
+        logger.error(f"Enhanced chat error: {e}\n{traceback.format_exc()}")
         # Fallback response for better user experience
-        fallback_response = f"""I apologize, but I encountered an error processing your request. 
-
-Error details: {str(e)}
-
-However, I'm still here to help! Please try:
-1. Simplifying your question
-2. Breaking it into smaller parts
-3. Providing specific code examples
-
-I can assist with:
-- Code debugging and analysis
-- Programming questions
-- Best practices
-- Code generation and refactoring
-
-What would you like help with?"""
-        
-        return {
-            "response": fallback_response,
-            "model_used": request.model,
-            "session_id": request.session_id,
-            "error": True,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        fallback_response = f"""I apologize, but I encountered an error processing your request. \n\nError details: {e}\n\nHowever, I'm still here to help! Please try:\n1. Simplifying your question\n2. Breaking it into smaller parts\n3. Providing specific code examples\n\nI can assist with:\n- Code debugging and analysis\n- Programming questions\n- Best practices\n- Code generation and refactoring\n\nWhat would you like help with?"""
+        return {"response": fallback_response, "model": request.model, "error": str(e)}
 
 @app.post("/api/execute")
 async def enhanced_code_execution(request: EnhancedCodeExecutionRequest, db: Session = Depends(get_db)):
@@ -875,7 +901,7 @@ async def ai_composer(request: ComposerRequest, db: Session = Depends(get_db)):
         # Log API usage
         api_usage = APIUsage(
             endpoint="/api/composer",
-            model=request.model,
+            model_used=request.model,
             language=request.language,
             session_id=request.session_id
         )

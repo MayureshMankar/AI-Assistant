@@ -121,9 +121,11 @@ class FileUploadCreate(FileUploadBase):
     file_size: Optional[int] = None
     mime_type: Optional[str] = None
 
-class FileUpload(FileUploadBase):
+class FileUpload(BaseModel):
     id: UUID
     session_id: UUID
+    filename: str
+    file_path: str
     file_size: Optional[int] = None
     mime_type: Optional[str] = None
     processed: bool = False
@@ -168,6 +170,7 @@ class APIUsageBase(BaseModel):
 
 class APIUsageCreate(APIUsageBase):
     user_id: Optional[UUID] = None
+    session_id: Optional[UUID] = None  # ✅ Add this
     status_code: Optional[int] = None
     response_time: Optional[float] = None
     tokens_used: Optional[int] = None
@@ -176,6 +179,7 @@ class APIUsageCreate(APIUsageBase):
 class APIUsage(APIUsageBase):
     id: UUID
     user_id: Optional[UUID] = None
+    session_id: Optional[UUID] = None  # ✅ Add this
     status_code: Optional[int] = None
     response_time: Optional[float] = None
     tokens_used: Optional[int] = None
