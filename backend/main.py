@@ -474,21 +474,27 @@ async def enhanced_chat(request: EnhancedChatRequest, db: Session = Depends(get_
                 session_uuid = UUID(str(request.session_id))
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid session_id format. Must be a valid UUID.")
-        
-        # ✅ Log API usage with correct UUID
+
+        # ✅ Check if session exists before using it
+        if session_uuid:
+            session_exists = db.query(ChatSession.id).filter_by(id=session_uuid).scalar()
+            if not session_exists:
+                session_uuid = None  # Avoid foreign key error
+
+        # ✅ Log API usage safely
         api_usage = APIUsage(
             endpoint="/api/chat",
             method="POST",
             model_used=request.model,
-            session_id=session_uuid
+            session_id=session_uuid  # Now guaranteed to be None or valid
         )
         db.add(api_usage)
         db.commit()
-        
+
         # Check if model is in our free models list
         if request.model not in ENHANCED_MODELS:
             request.model = DEFAULT_MODEL
-        
+
         model_info = ENHANCED_MODELS[request.model]
 
         # Rest of your logic
