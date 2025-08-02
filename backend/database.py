@@ -17,7 +17,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     # Fallback to SQLite for development
     DATABASE_URL = "sqlite:///./ai_assistant.db"
-    logger.warning("No DATABASE_URL found, using SQLite for development")
+    logger.info("No DATABASE_URL found, using SQLite for development")
 
 # Database engine configuration
 if DATABASE_URL.startswith("sqlite"):
@@ -76,12 +76,9 @@ def create_tables():
         logger.info("Creating database tables...")
         
         # Import models here to avoid any circular import issues
-        from models import (
-            Base, User, ChatSession, ChatMessage, CodeExecution, 
-            CodeAnalysis, FileUpload, APIUsage, ProjectTemplate, SystemMetrics
-        )
+        from models import Base
         
-        logger.info("Successfully imported all models")
+        logger.info("Successfully imported Base model")
         
         # Create all tables
         Base.metadata.create_all(bind=engine)
@@ -158,10 +155,24 @@ def insert_default_data():
                     }
                 )
                 
+                template3 = ProjectTemplate(
+                    name="Node.js Express API",
+                    description="Express.js REST API server",
+                    language="javascript",
+                    framework="express",
+                    template_data={
+                        "files": {
+                            "server.js": "const express = require('express');\nconst app = express();\nconst PORT = process.env.PORT || 3000;\n\napp.use(express.json());\n\napp.get('/', (req, res) => {\n  res.json({ message: 'Hello World!' });\n});\n\napp.listen(PORT, () => {\n  console.log(`Server running on port ${PORT}`);\n});",
+                            "package.json": '{\n  "name": "express-api",\n  "version": "1.0.0",\n  "main": "server.js",\n  "dependencies": {\n    "express": "^4.18.0"\n  }\n}'
+                        }
+                    }
+                )
+                
                 db.add(template1)
                 db.add(template2)
+                db.add(template3)
                 db.commit()
-                logger.info("Default templates inserted successfully!")
+                logger.info("✅ Default templates inserted successfully!")
             else:
                 logger.info("Default data already exists, skipping insertion")
             
@@ -174,6 +185,80 @@ def insert_default_data():
     except Exception as e:
         logger.warning(f"Failed to insert default data: {e}")
 
+def get_database_info():
+    """Get database information for health checks"""
+    try:
+        db_type = "SQLite" if DATABASE_URL.startswith("sqlite") else "PostgreSQL"
+        
+        # Get table count
+        with engine.connect() as connection:
+            if DATABASE_URL.startswith("sqlite"):
+                result = connection.execute(text("SELECT name FROM sqlite_master WHERE type='table';"))
+            else:
+                result = connection.execute(text("SELECT tablename FROM pg_tables WHERE schemaname='public';"))
+            
+            tables = [row[0] for row in result.fetchall()]
+        
+        return {
+            "database_type": db_type,
+            "database_url": DATABASE_URL.split('@')[0] + '@***' if '@' in DATABASE_URL else DATABASE_URL,
+            "tables": tables,
+            "table_count": len(tables),
+            "engine_info": str(engine.url),
+            "pool_size": getattr(engine.pool, 'size', None),
+            "connection_count": getattr(engine.pool, 'checked_in', None)
+        }
+    except Exception as e:
+        logger.error(f"Failed to get database info: {e}")
+        return {
+            "database_type": "Unknown",
+            "error": str(e)
+        }
+
+def cleanup_old_sessions(days=30):
+    """Clean up old sessions and related data"""
+    try:
+        from models import ChatSession, ChatMessage, CodeExecution, CodeAnalysis
+        from datetime import datetime, timedelta
+        
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        
+        db = SessionLocal()
+        try:
+            # Find old sessions
+            old_sessions = db.query(ChatSession).filter(
+                ChatSession.created_at < cutoff_date
+            ).all()
+            
+            if old_sessions:
+                session_ids = [session.id for session in old_sessions]
+                
+                # Delete related data
+                db.query(ChatMessage).filter(ChatMessage.session_id.in_(session_ids)).delete()
+                db.query(CodeExecution).filter(CodeExecution.session_id.in_(session_ids)).delete()
+                db.query(CodeAnalysis).filter(CodeAnalysis.session_id.in_(session_ids)).delete()
+                
+                # Delete sessions
+                db.query(ChatSession).filter(ChatSession.id.in_(session_ids)).delete()
+                
+                db.commit()
+                logger.info(f"✅ Cleaned up {len(old_sessions)} old sessions")
+                return len(old_sessions)
+            else:
+                logger.info("No old sessions to clean up")
+                return 0
+                
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to cleanup old sessions: {e}")
+            return 0
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Session cleanup error: {e}")
+        return 0
+
 # Export commonly used items
 __all__ = [
     "engine",
@@ -181,5 +266,7 @@ __all__ = [
     "get_db",
     "create_tables",
     "test_connection",
-    "initialize_database"
+    "initialize_database",
+    "get_database_info",
+    "cleanup_old_sessions"
 ]
