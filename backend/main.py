@@ -32,21 +32,32 @@ from uuid import UUID
 import traceback
 
 
-# Configure logging
+# Logging setup
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Load .env file
 load_dotenv()
 
+# Configuration
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+if not OPENROUTER_API_KEY:
+    raise RuntimeError("❌ OPENROUTER_API_KEY not found in .env file!")
+
+MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", 10 * 1024 * 1024))  # 10MB
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(exist_ok=True)
+
+# FastAPI App
 app = FastAPI(
     title="AI Coding Assistant Pro",
-    description="Advanced AI-powered coding assistant with multi-language support, intelligent analysis, and collaborative features",
+    description="Advanced AI-powered coding assistant",
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
 
-# Enhanced CORS configuration
+# CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("ALLOWED_ORIGINS", "*").split(","),
