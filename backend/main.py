@@ -482,198 +482,125 @@ async def enhanced_chat(request: EnhancedChatRequest, db: Session = Depends(get_
         if request.session_id:
             try:
                 session_uuid = UUID(str(request.session_id))
+
+                # Check if session exists
+                existing_session = db.query(ChatSession).filter_by(id=session_uuid).first()
+                if not existing_session:
+                    session_uuid = None  # Avoid FK error
+
             except ValueError:
                 raise HTTPException(status_code=400, detail="Invalid session_id format")
 
-        # ✅ Check if model is in our free models list
+        # ✅ Check model validity
         if request.model not in ENHANCED_MODELS:
             request.model = DEFAULT_MODEL
 
         model_info = ENHANCED_MODELS[request.model]
 
-        # ✅ Add system context before the first user message
-        system_context = {
-            "role": "system",
-            "content": (
-                "You are an expert AI coding assistant integrated into a VS Code-like IDE environment. "
-                "Respond concisely, helpfully, and with accurate code examples where needed."
-            )
-        }
+        # ✅ Compose context
+        context_parts = []
 
-        # Ensure the system message is first
-        messages = [system_context] + request.messages
-
-        # ✅ Prepare request payload
-        payload = {
-            "model": request.model,
-            "messages": messages
-        }
-
-        # ✅ Prepare headers for OpenRouter
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "HTTP-Referer": "https://yourdomain.com",
-            "X-Title": "AI Coding Assistant Pro"
-        }
-
-        # ✅ Call OpenRouter
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers=headers,
-                json=payload
-            )
-
-        if response.status_code != 200:
-            raise HTTPException(status_code=response.status_code, detail=response.json())
-
-        response_data = response.json()
-
-        # ✅ Log API usage after successful request
-        api_usage = APIUsage(
-            endpoint="/api/chat",
-            method="POST",
-            model_used=request.model,
-            session_id=session_uuid,
-            status_code=response.status_code,
-            response_time=None,
-            tokens_used=None
-        )
-        db.add(api_usage)
-        db.commit()
-
-        return response_data
-
-    except Exception as e:
-        logger.error(f"🔥 Chat error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-Environment Details:
-- IDE: VS Code-like interface with file explorer, editor, and AI assistant
-- Model: {request.model} ({model_info['description']})
-- Auto language detection: Enabled
-- Context limit: {model_info['max_tokens']} tokens
-- Free model with full capabilities
-
+        # System context
+        system_context = f"""
+You are an expert AI coding assistant integrated into a VS Code-like IDE environment.
+Model: {request.model} ({model_info['description']})
+Context limit: {model_info['max_tokens']} tokens
 Your capabilities:
-- Code analysis and debugging across all programming languages
-- Auto-detect programming languages from code snippets
-- Provide detailed explanations and solutions
-- Generate, refactor, and optimize code
-- Best practices and code review
-- Multi-file project assistance
-- Context-aware responses based on conversation history
-
-Guidelines:
-- Use markdown code blocks with language specification
-- Provide practical, actionable advice
-- Explain your reasoning
-- Be concise but thorough
-- Maintain conversation context
-- Focus on code quality and best practices"""
-        
+- Code debugging and generation
+- Language detection and assistance
+- Contextual project help
+"""
         context_parts.append(system_context)
-        
-        # Add file context if available
-        if hasattr(request, 'context') and request.context:
-            context_data = request.context
-            
-            # Add conversation history
-            if 'conversation_history' in context_data:
-                history = context_data['conversation_history']
-                if isinstance(history, list) and len(history) > 0:
-                    context_parts.append("\nConversation History:")
-                    for msg in history[-10:]:  # Last 10 messages
-                        if isinstance(msg, dict) and 'role' in msg and 'content' in msg:
-                            role = msg['role'].upper()
-                            content = msg['content'][:500] + "..." if len(msg['content']) > 500 else msg['content']
-                            context_parts.append(f"{role}: {content}")
-            
-            # Add file context
-            if 'files' in context_data and context_data['files']:
-                context_parts.append(f"\nProject Files ({len(context_data['files'])}):")
-                for file_info in context_data['files'][:5]:  # Limit to 5 files
-                    if isinstance(file_info, dict):
-                        name = file_info.get('name', 'unknown')
-                        lang = file_info.get('language', 'unknown')
-                        context_parts.append(f"- {name} ({lang})")
-            
-            # Add active file context
-            if 'active_file' in context_data and context_data['active_file']:
-                context_parts.append(f"\nActive File: {context_data['active_file']}")
-            
-            # Add editor content context (limited)
-            if 'editor_content' in context_data and context_data['editor_content']:
-                editor_content = context_data['editor_content']
-                detected_lang = detect_language(editor_content)
-                context_parts.append(f"\nEditor Content ({detected_lang}):")
-                context_parts.append(f"```{detected_lang}\n{editor_content}\n```")
-        
-        # Combine all context
+
+        # File/project/editor context
+        if hasattr(request, "context") and request.context:
+            ctx = request.context
+
+            # Conversation history
+            if isinstance(ctx.get("conversation_history"), list):
+                context_parts.append("\nConversation History:")
+                for msg in ctx["conversation_history"][-10:]:
+                    if isinstance(msg, dict):
+                        role = msg.get("role", "").upper()
+                        content = msg.get("content", "")
+                        context_parts.append(f"{role}: {content[:300]}...")
+
+            # Project files
+            if isinstance(ctx.get("files"), list):
+                context_parts.append(f"\nProject Files ({len(ctx['files'])}):")
+                for f in ctx["files"][:5]:
+                    context_parts.append(f"- {f.get('name')} ({f.get('language')})")
+
+            # Editor content
+            if editor := ctx.get("editor_content"):
+                lang = detect_language(editor)
+                context_parts.append(f"\nEditor Content ({lang}):\n```{lang}\n{editor[:1000]}\n```")
+
+        # Final user question
+        context_parts.append(f"\nUser Question: {request.message}")
         full_context = "\n".join(context_parts)
-        
-        # Prepare the enhanced message
-        enhanced_message = f"{full_context}\n\nUser Question: {request.message}"
-        
-        # Limit total context size to prevent token overflow
-        max_context_length = model_info['max_tokens'] - 1000  # Reserve space for response
-        if len(enhanced_message) > max_context_length:
-            # Truncate context but keep user message
-            truncated_context = full_context[:max_context_length - len(request.message) - 100]
-            enhanced_message = f"{truncated_context}\n...\n\nUser Question: {request.message}"
-        
-        # Call OpenRouter API
+
+        # Truncate context if needed
+        max_context_len = model_info["max_tokens"] - 1000
+        if len(full_context) > max_context_len:
+            full_context = full_context[:max_context_len]
+
+        # ✅ Generate AI response
         client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=os.getenv("OPENROUTER_API_KEY")
         )
-        
+
         response = client.chat.completions.create(
             model=request.model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": enhanced_message
-                }
-            ],
+            messages=[{"role": "user", "content": full_context}],
             temperature=request.temperature,
-            max_tokens=min(4000, model_info['max_tokens'] // 2),  # Conservative limit
+            max_tokens=min(4000, model_info["max_tokens"] // 2),
             stream=False
         )
-        
+
         ai_response = response.choices[0].message.content
-        
-        # Generate or use session UUID
-        session_uuid = request.session_id or uuid.uuid4()
-        
-        # Avoid duplicate session insert
-        existing_session = db.query(ChatSession).filter(ChatSession.id == session_uuid).first()
-        
-        if not existing_session:
-            chat_session = ChatSession(
+
+        # ✅ Ensure session_id is valid
+        if not session_uuid:
+            session_uuid = uuid.uuid4()
+            db.add(ChatSession(
                 id=session_uuid,
                 user_id=None,
                 session_name="New Session",
                 mode="chat"
-            )
-            db.add(chat_session)
+            ))
             db.commit()
-        
+
+        # ✅ Log API usage safely
+        db.add(APIUsage(
+            session_id=session_uuid,
+            method="POST",
+            model_used=request.model,
+            endpoint="/api/chat",
+            status_code=200
+        ))
+        db.commit()
+
+        # ✅ Final response
         return {
             "response": ai_response,
             "model_used": request.model,
-            "session_id": request.session_id,
-            "context_included": bool(hasattr(request, 'context') and request.context),
-            "detected_language": detect_language(request.message) if '```' in request.message else None,
+            "session_id": str(session_uuid),
+            "context_included": bool(getattr(request, "context", None)),
+            "detected_language": detect_language(request.message) if "```" in request.message else None,
             "timestamp": datetime.utcnow().isoformat()
         }
-        
+
     except Exception as e:
-        logger.error(f"Enhanced chat error: {e}\n{traceback.format_exc()}")
-        # Fallback response for better user experience
-        fallback_response = f"""I apologize, but I encountered an error processing your request. \n\nError details: {e}\n\nHowever, I'm still here to help! Please try:\n1. Simplifying your question\n2. Breaking it into smaller parts\n3. Providing specific code examples\n\nI can assist with:\n- Code debugging and analysis\n- Programming questions\n- Best practices\n- Code generation and refactoring\n\nWhat would you like help with?"""
-        return {"response": fallback_response, "model": request.model, "error": str(e)}
+        logger.error(f"❌ Enhanced chat error: {e}\n{traceback.format_exc()}")
+        fallback = (
+            "I encountered an error processing your request.\n\n"
+            f"Error: {e}\n\n"
+            "Please try again or simplify your query."
+        )
+        return {"response": fallback, "error": str(e), "model": request.model}
+
 
 @app.post("/api/execute")
 async def enhanced_code_execution(request: EnhancedCodeExecutionRequest, db: Session = Depends(get_db)):
