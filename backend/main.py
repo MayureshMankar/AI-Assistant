@@ -476,43 +476,78 @@ DEFAULT_MODEL = list(ENHANCED_MODELS.keys())[0]
 
 @app.post("/api/chat")
 async def enhanced_chat(request: EnhancedChatRequest, db: Session = Depends(get_db)):
-    """Enhanced chat with improved context handling for VS Code IDE interface"""
     try:
-        # ✅ Convert session_id to UUID
+        # ✅ Validate UUID
         session_uuid = None
         if request.session_id:
             try:
                 session_uuid = UUID(str(request.session_id))
             except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid session_id format. Must be a valid UUID.")
+                raise HTTPException(status_code=400, detail="Invalid session_id format")
 
-        # ✅ Check if session exists before using it
-        if session_uuid:
-            session_exists = db.query(ChatSession.id).filter_by(id=session_uuid).scalar()
-            if not session_exists:
-                session_uuid = None  # Avoid foreign key error
-
-        # ✅ Log API usage safely
-        api_usage = APIUsage(
-            endpoint="/api/chat",
-            method="POST",
-            model_used=request.model,
-            session_id=session_uuid  # Now guaranteed to be None or valid
-        )
-        db.add(api_usage)
-        db.commit()
-
-        # Check if model is in our free models list
+        # ✅ Check if model is in our free models list
         if request.model not in ENHANCED_MODELS:
             request.model = DEFAULT_MODEL
 
         model_info = ENHANCED_MODELS[request.model]
 
-        # Rest of your logic
-        context_parts = []
-        
-        # Add system context
-        system_context = f"""You are an expert AI coding assistant integrated into a VS Code-like IDE environment.
+        # ✅ Add system context before the first user message
+        system_context = {
+            "role": "system",
+            "content": (
+                "You are an expert AI coding assistant integrated into a VS Code-like IDE environment. "
+                "Respond concisely, helpfully, and with accurate code examples where needed."
+            )
+        }
+
+        # Ensure the system message is first
+        messages = [system_context] + request.messages
+
+        # ✅ Prepare request payload
+        payload = {
+            "model": request.model,
+            "messages": messages
+        }
+
+        # ✅ Prepare headers for OpenRouter
+        headers = {
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "HTTP-Referer": "https://yourdomain.com",
+            "X-Title": "AI Coding Assistant Pro"
+        }
+
+        # ✅ Call OpenRouter
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload
+            )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=response.json())
+
+        response_data = response.json()
+
+        # ✅ Log API usage after successful request
+        api_usage = APIUsage(
+            endpoint="/api/chat",
+            method="POST",
+            model_used=request.model,
+            session_id=session_uuid,
+            status_code=response.status_code,
+            response_time=None,
+            tokens_used=None
+        )
+        db.add(api_usage)
+        db.commit()
+
+        return response_data
+
+    except Exception as e:
+        logger.error(f"🔥 Chat error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 Environment Details:
 - IDE: VS Code-like interface with file explorer, editor, and AI assistant
