@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from database import get_db, SessionLocal, initialize_database
 from models import ChatSession, ChatMessage, CodeExecution, CodeAnalysis, FileUpload, APIUsage
 import logging
-from uuid import UUID
+from uuid import UUID, uuid4
 import traceback
 
 
@@ -42,6 +42,7 @@ load_dotenv()
 # Configuration
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 if not OPENROUTER_API_KEY:
+
     logger.warning("⚠️ OPENROUTER_API_KEY not found in .env file! Some features may not work.")
 
 MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", 10 * 1024 * 1024))  # 10MB
@@ -438,14 +439,19 @@ async def detect_language_endpoint(request: dict):
 # Set a valid default model from the current free models
 DEFAULT_MODEL = list(ENHANCED_MODELS.keys())[0]
 
+# Enhanced chat endpoint with better context handling and AI response
+
 @app.post("/api/chat")
 async def enhanced_chat(request: EnhancedChatRequest, db: Session = Depends(get_db)):
     try:
+
         # Validate UUID if provided
+
         session_uuid = None
         if request.session_id:
             try:
                 session_uuid = UUID(str(request.session_id))
+
                 # Check if session exists, create if not
                 existing_session = db.query(ChatSession).filter_by(id=session_uuid).first()
                 if not existing_session:
@@ -564,11 +570,13 @@ Your capabilities:
             "model_used": model_to_use,
             "session_id": str(session_uuid),
             "context_included": bool(request.context),
+
             "detected_language": detect_language(request.message) if "```" in request.message else None,
             "timestamp": datetime.utcnow().isoformat()
         }
 
     except Exception as e:
+
         logger.error(f"Enhanced chat error: {e}\n{traceback.format_exc()}")
         return {
             "response": f"I encountered an error: {str(e)}. Please try again.",
@@ -576,6 +584,7 @@ Your capabilities:
             "model_used": model_to_use if 'model_to_use' in locals() else DEFAULT_MODEL,
             "session_id": str(session_uuid) if 'session_uuid' in locals() and session_uuid else None
         }
+
 
 @app.post("/api/execute")
 async def enhanced_code_execution(request: EnhancedCodeExecutionRequest, db: Session = Depends(get_db)):
@@ -1361,6 +1370,7 @@ async def internal_error_handler(request: Request, exc):
 
 if __name__ == "__main__":
     import uvicorn
+
     
     # Initialize database on startup
     logger.info("🚀 Starting AI Coding Assistant Pro...")

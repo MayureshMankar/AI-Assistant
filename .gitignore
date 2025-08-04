@@ -147,3 +147,7 @@ Thumbs.db
 ai_assistant.db
 uploads/
 logs/
+
+
+alembic/versions/__pycache__/
+*.vsix

@@ -1,0 +1,23 @@
+# Ignore sensitive files
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs and uploads
+logs/
+uploads/
+temp/
+
+# Alembic SQLite (if fallback)
+*.db
+*.sqlite*
+
+# Misc
+.DS_Store
+.vscode/
+.idea/
